@@ -63,6 +63,12 @@
 
 
 /**************************************
+*  Includes
+**************************************/
+#include "lz4.h"
+
+
+/**************************************
 *  Compiler Options
 **************************************/
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L)   /* C99 */
@@ -88,8 +94,6 @@
 #  endif   /* __STDC_VERSION__ */
 #endif  /* _MSC_VER */
 
-#define GCC_VERSION (__GNUC__ * 100 + __GNUC_MINOR__)
-
 #if (GCC_VERSION >= 302) || (__INTEL_COMPILER >= 800) || defined(__clang__)
 #  define expect(expr,value)    (__builtin_expect ((expr),(value)) )
 #else
@@ -108,12 +112,6 @@
 #define FREEMEM        free
 #include <string.h>   /* memset, memcpy */
 #define MEM_INIT       memset
-
-
-/**************************************
-*  Includes
-**************************************/
-#include "lz4.h"
 
 
 /**************************************
@@ -758,6 +756,7 @@ int LZ4_freeStream (LZ4_stream_t* LZ4_stream)
 }
 
 
+#define HASH_UNIT sizeof(size_t)
 int LZ4_loadDict (LZ4_stream_t* LZ4_dict, const char* dictionary, int dictSize)
 {
     LZ4_stream_t_internal* dict = (LZ4_stream_t_internal*) LZ4_dict;
@@ -767,7 +766,7 @@ int LZ4_loadDict (LZ4_stream_t* LZ4_dict, const char* dictionary, int dictSize)
 
     if (dict->initCheck) LZ4_resetStream(LZ4_dict);                         /* Uninitialized structure detected */
 
-    if (dictSize < MINMATCH)
+    if (dictSize < (int)HASH_UNIT)
     {
         dict->dictionary = NULL;
         dict->dictSize = 0;
@@ -780,7 +779,7 @@ int LZ4_loadDict (LZ4_stream_t* LZ4_dict, const char* dictionary, int dictSize)
     dict->dictSize = (U32)(dictEnd - p);
     dict->currentOffset += dict->dictSize;
 
-    while (p <= dictEnd-MINMATCH)
+    while (p <= dictEnd-HASH_UNIT)
     {
         LZ4_putPosition(p, dict, byU32, base);
         p+=3;
