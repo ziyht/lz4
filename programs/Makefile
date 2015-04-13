@@ -61,6 +61,7 @@ endif
 TRAVIS_TARGET:= $(LZ4_TRAVIS_CI_ENV)
 TEST_FILES   := COPYING
 TEST_TARGETS := test-native
+FUZZER_TIME  := -T9mn
 
 
 default: lz4
@@ -250,7 +251,7 @@ test-mem: lz4 datagen fuzzer frametest fullbench
 	valgrind --leak-check=yes ./lz4 -9 -B5D -f tmp tmp2
 	valgrind --leak-check=yes ./lz4 -t tmp2
 	valgrind --leak-check=yes ./lz4 -bi1 tmp
-	valgrind --leak-check=yes ./fullbench -i1 tmp
+	valgrind --leak-check=yes ./fullbench -i1 tmp tmp2
 	./datagen -g256MB > tmp
 	valgrind --leak-check=yes ./lz4 -B4D -f -vq tmp $(VOID)
 	rm tmp*
