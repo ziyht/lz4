@@ -104,14 +104,14 @@ clangtest: clean
 	$(MAKE) all CC=clang CPPFLAGS="-Werror -Wconversion -Wno-sign-conversion"
 
 sanitize: clean
-	$(MAKE) test CC=clang CPPFLAGS="-g -fsanitize=undefined" FUZZER_TIME="-T1mn"
+	$(MAKE) test CC=clang CPPFLAGS="-g -fsanitize=undefined" FUZZER_TIME="-T1mn" NB_LOOPS=-i1
 
 staticAnalyze: clean
-	scan-build -v $(MAKE) all CFLAGS=-g
+	scan-build --status-bugs -v $(MAKE) all CFLAGS=-g
 
 armtest: clean
-	cd lib; $(MAKE) -e all CC=arm-linux-gnueabi-gcc CFLAGS="-O3 -Werror"
-	cd programs; $(MAKE) -e bins CC=arm-linux-gnueabi-gcc CFLAGS="-O3 -Werror"
+	cd lib; $(MAKE) -e all CC=arm-linux-gnueabi-gcc CPPFLAGS="-Werror"
+	cd programs; $(MAKE) -e bins CC=arm-linux-gnueabi-gcc CPPFLAGS="-Werror"
 
 streaming-examples:
 	cd examples; $(MAKE) -e test

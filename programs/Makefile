@@ -151,15 +151,18 @@ test-travis: $(TRAVIS_TARGET)
 
 test-lz4-sparse: lz4 datagen
 	@echo ---- test sparse file support ----
-	./datagen -g50M -P100 | ./lz4 -B4D | ./lz4 -dv --sparse > tmpB4
-	./datagen -g50M -P100 | ./lz4 -B5D | ./lz4 -dv --sparse > tmpB5
-	./datagen -g50M -P100 | ./lz4 -B6D | ./lz4 -dv --sparse > tmpB6
-	./datagen -g50M -P100 | ./lz4 -B7D | ./lz4 -dv --sparse > tmpB7
+	./datagen -g5M  -P100 > tmpSrc
+	./lz4 -B4D tmpSrc | ./lz4 -dv --sparse > tmpB4
+	diff -s tmpSrc tmpB4
+	./lz4 -B5D tmpSrc | ./lz4 -dv --sparse > tmpB5
+	diff -s tmpSrc tmpB5
+	./lz4 -B6D tmpSrc | ./lz4 -dv --sparse > tmpB6
+	diff -s tmpSrc tmpB6
+	./lz4 -B7D tmpSrc | ./lz4 -dv --sparse > tmpB7
+	diff -s tmpSrc tmpB7
+	./lz4 tmpSrc | ./lz4 -dv --no-sparse > tmpNoSparse
+	diff -s tmpSrc tmpNoSparse
 	ls -ls tmp*
-	./datagen -g50M -P100 | diff -s - tmpB4
-	./datagen -g50M -P100 | diff -s - tmpB5
-	./datagen -g50M -P100 | diff -s - tmpB6
-	./datagen -g50M -P100 | diff -s - tmpB7
 	./datagen -s1 -g1200007 -P100 | ./lz4 | ./lz4 -dv --sparse > tmpOdd   # Odd size file (to not finish on an exact nb of blocks)
 	./datagen -s1 -g1200007 -P100 | diff -s - tmpOdd
 	ls -ls tmpOdd
@@ -191,7 +194,20 @@ test-lz4-frame-concatenation: lz4 datagen
 	@rm *.test
 	@echo frame concatenation test completed
 
-test-lz4: lz4 datagen test-lz4-sparse test-lz4-contentSize test-lz4-frame-concatenation
+test-lz4-multiple: lz4 datagen
+	@echo ---- test multiple files ----
+	@./datagen -s1        > tmp1 2> $(VOID)
+	@./datagen -s2 -g100K > tmp2 2> $(VOID)
+	@./datagen -s3 -g1M   > tmp3 2> $(VOID)
+	./lz4 -f -m tmp*
+	ls -ls tmp*
+	rm tmp1 tmp2 tmp3
+	./lz4 -df -m *.lz4
+	ls -ls tmp*
+	./lz4 -f -m tmp1 notHere tmp2; echo $$?
+	@rm tmp*
+
+test-lz4: lz4 datagen test-lz4-multiple test-lz4-sparse test-lz4-contentSize test-lz4-frame-concatenation
 	@echo ---- test lz4 basic compression/decompression ----
 	./datagen -g0     | ./lz4 -v     | ./lz4 -t
 	./datagen -g16KB  | ./lz4 -9     | ./lz4 -t
@@ -202,13 +218,6 @@ test-lz4: lz4 datagen test-lz4-sparse test-lz4-contentSize test-lz4-frame-concat
 	./datagen -g256MB | ./lz4 -vqB4D | ./lz4 -t
 	./datagen -g6GB   | ./lz4 -vqB5D | ./lz4 -qt
 	./datagen -g6GB   | ./lz4 -vq9BD | ./lz4 -qt
-	@echo ---- test multiple input files ----
-	@./datagen -s1 > file1
-	@./datagen -s2 > file2
-	@./datagen -s3 > file3
-	./lz4 -f -m file1 file2 file3
-	ls -l file*
-	@rm file1 file2 file3 file1.lz4 file2.lz4 file3.lz4
 	@echo ---- test pass-through ----
 	./datagen | ./lz4 -tf
 
@@ -226,10 +235,10 @@ test-lz4c32: lz4 lz4c32 datagen
 	./datagen -g6GB   | ./lz4c32 -vq9BD | ./lz4    -qt
 
 test-fullbench: fullbench
-	./fullbench --no-prompt $(TEST_FILES)
+	./fullbench --no-prompt $(NB_LOOPS) $(TEST_FILES)
 
 test-fullbench32: fullbench32
-	./fullbench32 --no-prompt $(TEST_FILES)
+	./fullbench32 --no-prompt $(NB_LOOPS) $(TEST_FILES)
 
 test-fuzzer: fuzzer
 	./fuzzer $(FUZZER_TIME)
@@ -244,19 +253,22 @@ test-frametest32: frametest32
 	./frametest32 $(FUZZER_TIME)
 
 test-mem: lz4 datagen fuzzer frametest fullbench
-	valgrind --leak-check=yes ./datagen -g50M > $(VOID)
+	valgrind --leak-check=yes --error-exitcode=1 ./datagen -g50M > $(VOID)
 	./datagen -g16KB > tmp
-	valgrind --leak-check=yes ./lz4 -9 -BD -f tmp $(VOID)
+	valgrind --leak-check=yes --error-exitcode=1 ./lz4 -9 -BD -f tmp $(VOID)
+	./datagen -g16KB -s2 > tmp2
+	./datagen -g16KB -s3 > tmp3
+	valgrind --leak-check=yes --error-exitcode=1 ./lz4 --force --multiple tmp tmp2 tmp3
 	./datagen -g16MB > tmp
-	valgrind --leak-check=yes ./lz4 -9 -B5D -f tmp tmp2
-	valgrind --leak-check=yes ./lz4 -t tmp2
-	valgrind --leak-check=yes ./lz4 -bi1 tmp
-	valgrind --leak-check=yes ./fullbench -i1 tmp tmp2
+	valgrind --leak-check=yes --error-exitcode=1 ./lz4 -9 -B5D -f tmp tmp2
+	valgrind --leak-check=yes --error-exitcode=1 ./lz4 -t tmp2
+	valgrind --leak-check=yes --error-exitcode=1 ./lz4 -bi1 tmp
+	valgrind --leak-check=yes --error-exitcode=1 ./fullbench -i1 tmp tmp2
 	./datagen -g256MB > tmp
-	valgrind --leak-check=yes ./lz4 -B4D -f -vq tmp $(VOID)
+	valgrind --leak-check=yes --error-exitcode=1 ./lz4 -B4D -f -vq tmp $(VOID)
 	rm tmp*
-	valgrind --leak-check=yes ./fuzzer -i64 -t1
-	valgrind --leak-check=yes ./frametest -i256
+	valgrind --leak-check=yes --error-exitcode=1 ./fuzzer -i64 -t1
+	valgrind --leak-check=yes --error-exitcode=1 ./frametest -i256
 
 test-mem32: lz4c32 datagen
 # unfortunately, valgrind doesn't seem to work with non-native binary. If someone knows how to do a valgrind-test on a 32-bits exe with a 64-bits system...

@@ -288,21 +288,21 @@ int LZ4_decompress_fast_usingDict (const char* source, char* dest, int originalS
    You can also define LZ4_DEPRECATE_WARNING_DEFBLOCK. */
 #ifndef LZ4_DEPRECATE_WARNING_DEFBLOCK
 #  define LZ4_DEPRECATE_WARNING_DEFBLOCK
-#  define GCC_VERSION (__GNUC__ * 100 + __GNUC_MINOR__)
-#  if (GCC_VERSION >= 405) || defined(__clang__)
+#  define LZ4_GCC_VERSION (__GNUC__ * 100 + __GNUC_MINOR__)
+#  if (LZ4_GCC_VERSION >= 405) || defined(__clang__)
 #    define LZ4_DEPRECATED(message) __attribute__((deprecated(message)))
-#  elif (GCC_VERSION >= 301)
+#  elif (LZ4_GCC_VERSION >= 301)
 #    define LZ4_DEPRECATED(message) __attribute__((deprecated))
 #  elif defined(_MSC_VER)
 #    define LZ4_DEPRECATED(message) __declspec(deprecated(message))
 #  else
 #    pragma message("WARNING: You need to implement LZ4_DEPRECATED for this compiler")
-#    define LZ4_DEPRECATED
+#    define LZ4_DEPRECATED(message)
 #  endif
 #endif // LZ4_DEPRECATE_WARNING_DEFBLOCK
 
 /* Obsolete compression functions */
-/* These functions are planned to generate warnings by r131 approximately */
+/* These functions are planned to start generate warnings by r131 approximately */
 int LZ4_compress               (const char* source, char* dest, int sourceSize);
 int LZ4_compress_limitedOutput (const char* source, char* dest, int sourceSize, int maxOutputSize);
 int LZ4_compress_withState               (void* state, const char* source, char* dest, int inputSize);

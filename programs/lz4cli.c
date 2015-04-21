@@ -102,7 +102,7 @@
 ***************************************/
 #define DISPLAY(...)           fprintf(stderr, __VA_ARGS__)
 #define DISPLAYLEVEL(l, ...)   if (displayLevel>=l) { DISPLAY(__VA_ARGS__); }
-static unsigned displayLevel = 2;   /* 0 : no display ; 1: errors ; 2 : + result + interaction + warnings ; 3 : + progression; 4 : + information */
+static unsigned displayLevel = 2;   /* 0 : no display ; 1: errors only ; 2 : downgradable normal ; 3 : non-downgradable normal; 4 : + information */
 
 
 /**************************************
@@ -175,7 +175,7 @@ static int usage_advanced(void)
     /* DISPLAY( " -BX    : enable block checksum (default:disabled)\n");   *//* Option currently inactive */
     DISPLAY( "--no-frame-crc : disable stream checksum (default:enabled)\n");
     DISPLAY( "--content-size : compressed frame includes original size (default:not present)\n");
-    DISPLAY( "--sparse       : enable sparse file (default:disabled)(experimental)\n");
+    DISPLAY( "--[no-]sparse  : sparse file support (default:enabled)\n");
     DISPLAY( "Benchmark arguments :\n");
     DISPLAY( " -b     : benchmark file(s)\n");
     DISPLAY( " -i#    : iteration loops [1-9](default : 3), benchmark mode only\n");
@@ -521,8 +521,9 @@ int main(int argc, char** argv)
     /* Check if output is defined as console; trigger an error in this case */
     if (!strcmp(output_filename,stdoutmark) && IS_CONSOLE(stdout) && !forceStdout) badusage();
 
-    /* No warning message in pure pipe mode (stdin + stdout) */
+    /* Downgrade notification level in pure pipe mode (stdin + stdout) and multiple file mode */
     if (!strcmp(input_filename, stdinmark) && !strcmp(output_filename,stdoutmark) && (displayLevel==2)) displayLevel=1;
+    if ((multiple_inputs) && (displayLevel==2)) displayLevel=1;
 
 
     /* IO Stream/File */
