@@ -322,12 +322,18 @@ static void LZ4IO_writeLE32 (void* p, unsigned value32)
     dstPtr[3] = (unsigned char)(value32 >> 24);
 }
 
+static int LZ4IO_LZ4_compress(const char* src, char* dst, int srcSize, int dstSize, int cLevel)
+{
+    (void)cLevel;
+    return LZ4_compress_fast(src, dst, srcSize, dstSize, 1);
+}
+
 /* LZ4IO_compressFilename_Legacy :
  * This function is intentionally "hidden" (not published in .h)
  * It generates compressed streams using the old 'legacy' format */
 int LZ4IO_compressFilename_Legacy(const char* input_filename, const char* output_filename, int compressionlevel)
 {
-    int (*compressionFunction)(const char* src, char* dst, int srcSize, int dstSize);
+    int (*compressionFunction)(const char* src, char* dst, int srcSize, int dstSize, int cLevel);
     unsigned long long filesize = 0;
     unsigned long long compressedfilesize = MAGICNUMBER_SIZE;
     char* in_buff;
@@ -341,7 +347,7 @@ int LZ4IO_compressFilename_Legacy(const char* input_filename, const char* output
 
     /* Init */
     start = clock();
-    if (compressionlevel < 3) compressionFunction = LZ4_compress_safe; else compressionFunction = LZ4_compressHC_limitedOutput;
+    if (compressionlevel < 3) compressionFunction = LZ4IO_LZ4_compress; else compressionFunction = LZ4_compress_HC;
 
     if (LZ4IO_getFiles(input_filename, output_filename, &finput, &foutput))
         EXM_THROW(20, "File error");
@@ -366,7 +372,7 @@ int LZ4IO_compressFilename_Legacy(const char* input_filename, const char* output
         filesize += inSize;
 
         /* Compress Block */
-        outSize = compressionFunction(in_buff, out_buff+4, inSize, outBuffSize);
+        outSize = compressionFunction(in_buff, out_buff+4, inSize, outBuffSize, compressionlevel);
         compressedfilesize += outSize+4;
         DISPLAYUPDATE(2, "\rRead : %i MB  ==> %.2f%%   ", (int)(filesize>>20), (double)compressedfilesize/filesize*100);
 
@@ -437,7 +443,11 @@ static void LZ4IO_freeCResources(cRess_t ress)
     if (LZ4F_isError(errorCode)) EXM_THROW(38, "Error : can't free LZ4F context resource : %s", LZ4F_getErrorName(errorCode));
 }
 
-
+/*
+ * LZ4IO_compressFilename_extRess()
+ * result : 0 : compression completed correctly
+ *          1 : missing or pb opening srcFileName
+ */
 static int LZ4IO_compressFilename_extRess(cRess_t ress, const char* srcFileName, const char* dstFileName, int compressionLevel)
 {
     unsigned long long filesize = 0;
@@ -457,10 +467,7 @@ static int LZ4IO_compressFilename_extRess(cRess_t ress, const char* srcFileName,
     memset(&prefs, 0, sizeof(prefs));
 
     /* File check */
-    {
-        int srcFileAbsent = LZ4IO_getFiles(srcFileName, dstFileName, &srcFile, &dstFile);
-        if (srcFileAbsent) return srcFileAbsent;
-    }
+    if (LZ4IO_getFiles(srcFileName, dstFileName, &srcFile, &dstFile)) return 1;
 
     /* Set compression parameters */
     prefs.autoFlush = 1;
@@ -541,11 +548,8 @@ static int LZ4IO_compressFilename_extRess(cRess_t ress, const char* srcFileName,
 
     /* Final Status */
     DISPLAYLEVEL(2, "\r%79s\r", "");
-    {
-        DISPLAYLEVEL(2, "Compressed %llu bytes into %llu bytes ==> %.2f%%\n",
-        (unsigned long long) filesize, (unsigned long long) compressedfilesize,
-                     (double)compressedfilesize/(filesize + !filesize)*100);   /* avoid division by zero */
-    }
+    DISPLAYLEVEL(2, "Compressed %llu bytes into %llu bytes ==> %.2f%%\n",
+        filesize, compressedfilesize, (double)compressedfilesize/(filesize + !filesize)*100);   /* avoid division by zero */
 
     return 0;
 }
@@ -582,8 +586,8 @@ int LZ4IO_compressFilename(const char* srcFileName, const char* dstFileName, int
 int LZ4IO_compressMultipleFilenames(const char** inFileNamesTable, int ifntSize, const char* suffix, int compressionLevel)
 {
     int i;
-    int missing_files = 0;
-    char* outFileName = (char*)malloc(FNSPACE);
+    int missed_files = 0;
+    char* dstFileName = (char*)malloc(FNSPACE);
     size_t ofnSize = FNSPACE;
     const size_t suffixSize = strlen(suffix);
     cRess_t ress;
@@ -595,18 +599,18 @@ int LZ4IO_compressMultipleFilenames(const char** inFileNamesTable, int ifntSize,
     for (i=0; i<ifntSize; i++)
     {
         size_t ifnSize = strlen(inFileNamesTable[i]);
-        if (ofnSize <= ifnSize+suffixSize+1) { free(outFileName); ofnSize = ifnSize + 20; outFileName = (char*)malloc(ofnSize); }
-        strcpy(outFileName, inFileNamesTable[i]);
-        strcat(outFileName, suffix);
+        if (ofnSize <= ifnSize+suffixSize+1) { free(dstFileName); ofnSize = ifnSize + 20; dstFileName = (char*)malloc(ofnSize); }
+        strcpy(dstFileName, inFileNamesTable[i]);
+        strcat(dstFileName, suffix);
 
-        missing_files += LZ4IO_compressFilename_extRess(ress, inFileNamesTable[i], outFileName, compressionLevel);
+        missed_files += LZ4IO_compressFilename_extRess(ress, inFileNamesTable[i], dstFileName, compressionLevel);
     }
 
     /* Close & Free */
     LZ4IO_freeCResources(ress);
-    free(outFileName);
+    free(dstFileName);
 
-    return missing_files;
+    return missed_files;
 }
 
 
@@ -626,10 +630,10 @@ static unsigned LZ4IO_readLE32 (const void* s)
 
 static unsigned LZ4IO_fwriteSparse(FILE* file, const void* buffer, size_t bufferSize, unsigned storedSkips)
 {
-    size_t* const bufferT = (size_t*)buffer;   /* Buffer is supposed malloc'ed, hence aligned on size_t */
-    size_t* ptrT = bufferT;
+    const size_t* const bufferT = (const size_t*)buffer;   /* Buffer is supposed malloc'ed, hence aligned on size_t */
+    const size_t* ptrT = bufferT;
     size_t  bufferSizeT = bufferSize / sizeT;
-    size_t* const bufferTEnd = bufferT + bufferSizeT;
+    const size_t* const bufferTEnd = bufferT + bufferSizeT;
     static const size_t segmentSizeT = (32 KB) / sizeT;
 
     if (!g_sparseFileSupport)   /* normal write */
@@ -675,7 +679,7 @@ static unsigned LZ4IO_fwriteSparse(FILE* file, const void* buffer, size_t buffer
 
     if (bufferSize & maskT)   /* size not multiple of sizeT : implies end of block */
     {
-        const char* const restStart = (char*)bufferTEnd;
+        const char* const restStart = (const char*)bufferTEnd;
         const char* restPtr = restStart;
         size_t  restSize =  bufferSize & maskT;
         const char* const restEnd = restStart + restSize;

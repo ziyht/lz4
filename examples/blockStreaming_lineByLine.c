@@ -42,8 +42,8 @@ static void test_compress(
 {
     LZ4_stream_t* const lz4Stream = LZ4_createStream();
     const size_t cmpBufBytes = LZ4_COMPRESSBOUND(messageMaxBytes);
-    char* const cmpBuf = malloc(cmpBufBytes);
-    char* const inpBuf = malloc(ringBufferBytes);
+    char* const cmpBuf = (char*) malloc(cmpBufBytes);
+    char* const inpBuf = (char*) malloc(ringBufferBytes);
     int inpOffset = 0;
 
     for ( ; ; )
@@ -64,8 +64,8 @@ static void test_compress(
 #endif
 
         {
-            const int cmpBytes = LZ4_compress_safe_continue(
-                lz4Stream, inpPtr, cmpBuf, inpBytes, cmpBufBytes);
+            const int cmpBytes = LZ4_compress_fast_continue(
+                lz4Stream, inpPtr, cmpBuf, inpBytes, cmpBufBytes, 1);
             if (cmpBytes <= 0) break;
             write_uint16(outFp, (uint16_t) cmpBytes);
             write_bin(outFp, cmpBuf, cmpBytes);
@@ -90,8 +90,8 @@ static void test_decompress(
     size_t ringBufferBytes)
 {
     LZ4_streamDecode_t* const lz4StreamDecode = LZ4_createStreamDecode();
-    char* const cmpBuf = malloc(LZ4_COMPRESSBOUND(messageMaxBytes));
-    char* const decBuf = malloc(ringBufferBytes);
+    char* const cmpBuf = (char*) malloc(LZ4_COMPRESSBOUND(messageMaxBytes));
+    char* const decBuf = (char*) malloc(ringBufferBytes);
     int decOffset = 0;
 
     for ( ; ; )
@@ -125,8 +125,8 @@ static int compare(FILE* f0, FILE* f1)
 {
     int result = 0;
     const size_t tempBufferBytes = 65536;
-    char* const b0 = malloc(tempBufferBytes);
-    char* const b1 = malloc(tempBufferBytes);
+    char* const b0 = (char*) malloc(tempBufferBytes);
+    char* const b1 = (char*) malloc(tempBufferBytes);
 
     while(0 == result)
     {
